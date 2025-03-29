@@ -1,0 +1,410 @@
+# BloodHero Application Documentation
+
+## Overview
+BloodHero is a blood donation management system that connects blood donors with people in need of blood donations. The application facilitates real-time blood request creation, donor matching, and communication between requesters and donors.
+
+## System Architecture
+
+### Frontend (Port: 3002)
+- Built with React.js
+- Uses modern UI components with Tailwind CSS
+- Implements responsive design for all device sizes
+- Real-time updates using WebSocket connections
+
+### Backend (Port: 3003)
+- Node.js/Express.js server
+- MongoDB database for data persistence
+- RESTful API architecture
+- JWT-based authentication
+- Email notification system using Nodemailer
+
+## Core Features
+
+### 1. Authentication System
+- JWT-based authentication
+- Persistent login sessions
+- Secure token storage in localStorage
+- Role-based access control (Donor/Requester)
+
+### 2. Blood Request Management
+- Create blood donation requests
+- Specify blood type, units needed, and urgency level
+- Hospital and location details
+- Contact information management
+- Request status tracking (pending, accepted, fulfilled)
+
+### 3. Donor Features
+- View available blood requests
+- Filter requests by:
+  - Blood type compatibility
+  - Distance
+  - Urgency level
+- Accept blood donation requests
+- View accepted requests history
+- Get directions to hospital locations
+
+### 4. Requester Features
+- Create and manage blood requests
+- Track request status
+- View donor responses
+- Update or cancel requests
+- Receive notifications when donors accept
+
+### 5. Location Services
+- Geolocation support for finding nearby requests
+- Default location fallback (Haryana coordinates)
+- Distance calculation between donor and hospital
+- Maps integration for directions
+
+### 6. Notification System
+- Email notifications for:
+  - Request creation confirmation
+  - Donor acceptance
+  - Request status updates
+- In-app notifications
+- Real-time WebSocket updates
+
+## API Endpoints
+
+### Public Routes
+- GET /api/requests - Get all blood requests
+- GET /api/requests/:id - Get specific request details
+
+### Protected Routes
+- GET /api/requests/me - Get user's requests
+- POST /api/requests - Create new request
+- PUT /api/requests/:id - Update request
+- DELETE /api/requests/:id - Delete request
+- GET /api/requests/nearby - Find nearby requests
+- GET /api/requests/directions/:requestId - Get directions
+
+## Data Models
+
+### Blood Request
+- requestedBy: User reference
+- patientName: String
+- bloodType: String
+- unitsNeeded: Number
+- hospital: {
+  name: String,
+  address: String,
+  city: String,
+  state: String
+}
+- location: {
+  type: Point,
+  coordinates: [Number]
+}
+- urgency: String (normal/high/critical)
+- status: String (pending/accepted/fulfilled)
+- donors: [{
+  donor: User reference,
+  status: String,
+  acceptedAt: Date
+}]
+
+### User
+- name: String
+- email: String
+- password: String (hashed)
+- bloodType: String
+- userType: String (donor/requester)
+- location: {
+  type: Point,
+  coordinates: [Number]
+}
+- lastDonation: Date
+- isAvailable: Boolean
+
+## Authentication Implementation
+
+### Token Management
+```javascript
+// Token Storage
+- JWT token stored in localStorage
+- Token added to API headers on startup
+- Token refreshed periodically
+- Token validated on each API request
+
+// Authentication Flow
+1. User logs in/registers
+2. Server generates JWT token
+3. Token stored in localStorage
+4. Token added to axios defaults
+5. Token validated on protected routes
+```
+
+### Session Persistence
+```javascript
+// Persistent Login
+- User data stored in localStorage
+- Auto-login on page refresh
+- Token validation on app startup
+- Automatic token refresh mechanism
+```
+
+### Error Prevention
+```javascript
+// Authentication Error Handling
+- Prevent redirect loops
+- Clear invalid tokens
+- Automatic logout on token expiry
+- Retry failed requests with new token
+```
+
+## Configuration Details
+
+### Frontend Configuration (Port 3002)
+```javascript
+// API Configuration
+const api = axios.create({
+  baseURL: 'http://localhost:3003/api',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Location Configuration
+const defaultCoordinates = {
+  lat: 29.159770,
+  lng: 75.737342  // Haryana default
+};
+```
+
+### Backend Configuration (Port 3003)
+```javascript
+// Server Setup
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use('/api', routes);
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useCreateIndex: true
+});
+
+// Email Configuration
+const transporter = nodemailer.createTransport({
+  service: process.env.EMAIL_SERVICE,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+```
+
+### Environment Variables
+```bash
+# Server Configuration
+PORT=3003
+NODE_ENV=development
+
+# Database
+MONGODB_URI=mongodb://localhost:27017/bloodhero
+
+# Authentication
+JWT_SECRET=your_jwt_secret_key
+JWT_EXPIRE=24h
+
+# Email Configuration
+EMAIL_SERVICE=gmail
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_email_password
+
+# Frontend URL
+FRONTEND_URL=http://localhost:3002
+
+# Default Location (Haryana)
+DEFAULT_LAT=29.159770
+DEFAULT_LNG=75.737342
+```
+
+## Detailed Implementation Guide
+
+### Blood Request Flow
+
+#### 1. Creating a Blood Request
+```javascript
+// Request Creation Process
+- User fills out request form with:
+  - Patient details
+  - Blood type needed
+  - Units required
+  - Hospital information
+  - Urgency level
+  - Contact details
+
+- Backend validates request:
+  - Checks daily request limit (max 15/day)
+  - Validates location coordinates
+  - Ensures required fields are present
+
+- System processes request:
+  - Saves to MongoDB
+  - Generates notifications
+  - Sends confirmation emails
+```
+
+#### 2. Request Discovery
+```javascript
+// Available Requests Component
+- Displays grid of available requests
+- Shows key information:
+  - Blood type needed
+  - Units required
+  - Hospital location
+  - Urgency level
+  - Distance from donor
+
+- Filtering options:
+  - By blood type
+  - By urgency level
+  - By distance (5km, 10km, 20km)
+
+- Real-time updates via WebSocket
+```
+
+#### 3. Request Acceptance
+```javascript
+// When donor accepts request:
+- Updates request status
+- Adds donor to request.donors array
+- Reveals contact information
+- Sends notifications:
+  - Email to requester
+  - Email to donor
+  - In-app notifications
+  - WebSocket updates
+```
+
+### API Response Formats
+
+#### Get Available Requests
+```json
+{
+  "requests": [{
+    "requestId": "string",
+    "bloodGroup": "string",
+    "requesterName": "string",
+    "hospital": {
+      "name": "string",
+      "address": "string",
+      "city": "string",
+      "state": "string"
+    },
+    "urgencyLevel": "string",
+    "unitsNeeded": "number",
+    "requestDate": "date",
+    "status": "string",
+    "coordinates": [number, number]
+  }]
+}
+```
+
+#### Create Request Response
+```json
+{
+  "request": {
+    "id": "string",
+    "patientName": "string",
+    "bloodType": "string",
+    "unitsNeeded": "number",
+    "hospital": {},
+    "location": {},
+    "status": "string",
+    "createdAt": "date"
+  },
+  "potentialDonorsCount": "number"
+}
+```
+
+### UI Components Structure
+
+#### Available Requests Component
+```jsx
+- Search and Filter Section
+  - Blood Type Filter
+  - Urgency Filter
+  - Distance Filter
+  - Search Input
+
+- Requests Grid
+  - Request Cards
+    - Header (Blood Type + Urgency)
+    - Details Section
+    - Action Buttons
+    - Contact Info (post-acceptance)
+
+- Empty State
+- Loading State
+- Error State
+```
+
+### Error Handling Examples
+
+```javascript
+// Common Error Scenarios
+1. Location Services Unavailable
+   - Fallback to default coordinates
+   - Show warning to user
+
+2. Request Creation Fails
+   - Validate input
+   - Show specific error messages
+   - Retry options for network issues
+
+3. Email Sending Fails
+   - Continue with request creation
+   - Log error for monitoring
+   - Show success with email warning
+```
+
+### Database Indexes
+```javascript
+// Optimize query performance
+- Location-based index:
+  db.bloodrequests.createIndex({ "location": "2dsphere" })
+
+- Blood type + status index:
+  db.bloodrequests.createIndex({ "bloodType": 1, "status": 1 })
+
+- User requests index:
+  db.bloodrequests.createIndex({ "requestedBy": 1, "createdAt": -1 })
+```
+
+## Security Features
+- Password hashing
+- JWT token authentication
+- Protected API routes
+- Input validation and sanitization
+- Rate limiting on sensitive endpoints
+- Secure email configuration
+
+## Environment Configuration
+Required environment variables:
+- PORT=3003
+- MONGODB_URI
+- JWT_SECRET
+- EMAIL_SERVICE
+- EMAIL_USER
+- EMAIL_PASS
+- FRONTEND_URL=http://localhost:3002
+
+## Error Handling
+- Consistent error response format
+- Detailed error logging
+- User-friendly error messages
+- Fallback mechanisms for critical features
+
+## Future Enhancements
+1. Blood bank integration
+2. Advanced matching algorithm
+3. Emergency request prioritization
+4. Mobile application
+5. SMS notifications
+6. Blood drive organization
+7. Donation history tracking
+8. Reward system for regular donors
